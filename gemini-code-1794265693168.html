@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>جستجوگر کدهای پزشکی ICD</title>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --surface: #ffffff;
+            --background: #f8fafc;
+            --text-main: #1e293b;
+            --text-muted: #64748b;
+            --border: #e2e8f0;
+        }
+        body {
+            font-family: Tahoma, 'Segoe UI', system-ui, sans-serif;
+            background-color: var(--background);
+            color: var(--text-main);
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .header h1 {
+            color: var(--primary);
+            margin-bottom: 5px;
+        }
+        .header p {
+            color: var(--text-muted);
+            font-size: 0.95rem;
+        }
+        .search-box {
+            width: 100%;
+            padding: 15px 20px;
+            font-size: 1.1rem;
+            border: 2px solid var(--border);
+            border-radius: 10px;
+            box-sizing: border-box;
+            margin-bottom: 20px;
+            transition: border-color 0.3s;
+            font-family: inherit;
+        }
+        .search-box:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+        .table-wrapper {
+            background: var(--surface);
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            overflow-x: auto;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: right;
+        }
+        th, td {
+            padding: 16px;
+            border-bottom: 1px solid var(--border);
+        }
+        th {
+            background-color: #f1f5f9;
+            color: var(--text-main);
+            font-weight: bold;
+            white-space: nowrap;
+        }
+        tr:hover {
+            background-color: #f8fafc;
+        }
+        .code-badge {
+            background-color: #e0f2fe;
+            color: #0369a1;
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-family: monospace;
+            font-weight: bold;
+            font-size: 1.05rem;
+            display: inline-block;
+        }
+        .en-text {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            direction: ltr;
+            display: inline-block;
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            margin-top: 4px;
+        }
+        .no-results {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-muted);
+            font-size: 1.1rem;
+        }
+        @media (max-width: 768px) {
+            th, td { padding: 12px; }
+            .search-box { font-size: 1rem; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header">
+        <h1>جستجوی کدهای ICD-10 و ICD-9-CM</h1>
+        <p>نام بیماری را به فارسی یا انگلیسی جستجو کنید</p>
+    </div>
+
+    <input type="text" id="searchInput" class="search-box" placeholder="مثال: دیابت، Asthma، فشار خون..." onkeyup="filterTable()">
+
+    <div class="table-wrapper">
+        <table id="icdTable">
+            <thead>
+                <tr>
+                    <th>نام بیماری</th>
+                    <th>ICD-10</th>
+                    <th>ICD-9-CM</th>
+                    <th>توضیحات تکمیلی</th>
+                </tr>
+            </thead>
+            <tbody id="tableBody">
+                <!-- Data will be populated via JavaScript -->
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    // دیتابیس اولیه (شامل ۱۵ بیماری پرکاربرد)
+    const icdData = [
+        { fa: "فشار خون بالا (اولیه)", en: "Essential Hypertension", icd10: "I10", icd9: "401.9", desc: "افزایش فشار خون بدون علت مشخص پزشکی" },
+        { fa: "دیابت نوع ۲", en: "Type 2 Diabetes Mellitus", icd10: "E11.9", icd9: "250.00", desc: "دیابت شیرین نوع دو بدون عوارض جانبی" },
+        { fa: "آسم", en: "Asthma, unspecified", icd10: "J45.909", icd9: "493.90", desc: "آسم بدون عارضه یا وضعیت پایدار" },
+        { fa: "آپاندیسیت حاد", en: "Acute Appendicitis", icd10: "K35.80", icd9: "540.9", desc: "التهاب حاد آپاندیس بدون پارگی یا پریتونیت" },
+        { fa: "میگرن", en: "Migraine, unspecified", icd10: "G43.909", icd9: "346.90", desc: "سردرد میگرنی نامشخص" },
+        { fa: "ذات‌الریه (پنومونی)", en: "Pneumonia, unspecified", icd10: "J18.9", icd9: "486", desc: "عفونت ریه با ارگانیسم نامشخص" },
+        { fa: "سکته قلبی (انفارکتوس میوکارد حاد)", en: "Acute Myocardial Infarction", icd10: "I21.9", icd9: "410.90", desc: "سکته قلبی حاد نامشخص" },
+        { fa: "صرع", en: "Epilepsy, unspecified", icd10: "G40.909", icd9: "345.90", desc: "حملات تشنجی و صرع نامشخص" },
+        { fa: "کم‌خونی فقر آهن", en: "Iron Deficiency Anemia", icd10: "D50.9", icd9: "280.9", desc: "کاهش گلبول‌های قرمز به دلیل کمبود آهن" },
+        { fa: "رفلاکس معده (GERD)", en: "Gastroesophageal Reflux Disease", icd10: "K21.9", icd9: "530.81", desc: "بازگشت اسید معده به مری بدون ازوفاژیت" },
+        { fa: "کم‌کاری تیروئید", en: "Hypothyroidism, unspecified", icd10: "E03.9", icd9: "244.9", desc: "کاهش ترشح هورمون‌های غده تیروئید" },
+        { fa: "آرتروز زانو", en: "Osteoarthritis of knee", icd10: "M17.9", icd9: "715.96", desc: "تخریب مفصل زانو (استئوآرتریت)" },
+        { fa: "افسردگی اساسی", en: "Major Depressive Disorder", icd10: "F32.9", icd9: "296.20", desc: "اختلال افسردگی حاد و تک‌دوره‌ای نامشخص" },
+        { fa: "نارسایی مزمن کلیه (مرحله ۳)", en: "Chronic Kidney Disease, stage 3", icd10: "N18.3", icd9: "585.3", desc: "بیماری مزمن کلیوی با کاهش متوسط GFR" },
+        { fa: "بیماری آلزایمر", en: "Alzheimer's disease", icd10: "G30.9", icd9: "331.0", desc: "زوال عقل ناشی از آلزایمر نامشخص" }
+    ];
+
+    const tbody = document.getElementById("tableBody");
+
+    function renderTable(data) {
+        tbody.innerHTML = "";
+        if (data.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="4" class="no-results">بیماری مورد نظر یافت نشد. لطفا املای کلمه را بررسی کنید.</td></tr>`;
+            return;
+        }
+        
+        data.forEach(item => {
+            const row = document.createElement("tr");
+            row.innerHTML = `
+                <td>
+                    <strong>${item.fa}</strong><br>
+                    <span class="en-text">${item.en}</span>
+                </td>
+                <td dir="ltr" style="text-align: left;"><span class="code-badge">${item.icd10}</span></td>
+                <td dir="ltr" style="text-align: left;"><span class="code-badge">${item.icd9}</span></td>
+                <td>${item.desc}</td>
+            `;
+            tbody.appendChild(row);
+        });
+    }
+
+    function filterTable() {
+        const query = document.getElementById("searchInput").value.toLowerCase();
+        const filteredData = icdData.filter(item => 
+            item.fa.toLowerCase().includes(query) || 
+            item.en.toLowerCase().includes(query) ||
+            item.icd10.toLowerCase().includes(query) ||
+            item.icd9.toLowerCase().includes(query)
+        );
+        renderTable(filteredData);
+    }
+
+    // لود اولیه جدول
+    renderTable(icdData);
+</script>
+
+</body>
+</html>
